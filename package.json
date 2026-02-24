@@ -5,7 +5,11 @@
   "main": "index.js",
   "scripts": {
     "backend": "tsx watch src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "demo": "node src/crud-demo.js"
   },
   "keywords": [],
   "author": "",
@@ -13,13 +17,18 @@
   "type": "module",
   "dependencies": {
     "dotenv": "^17.3.1",
+    "drizzle-orm": "^0.45.1",
     "express": "^5.2.1",
+    "pg": "^8.18.0",
     "ws": "^8.19.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^25.3.0",
+    "@types/pg": "^8.16.0",
     "@types/ws": "^8.18.1",
-    "tsx": "^4.21.0"
+    "drizzle-kit": "^0.31.9",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
 }
