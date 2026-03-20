@@ -1,19 +1,33 @@
 import express from "express";
+import http from "http";
 import env from "dotenv";
+import type { Request, Response } from "express";
 import { matchRouter } from "./routes/matches";
+import { attachWebSocketServer } from "./ws/server";
 
+env.config({ quiet: true });
 const app = express();
+const server = http.createServer(app);
 app.use(express.json());
 
-env.config();
-const PORT = Number(process.env.SERVER_BACKEND_PORT);
+const PORT = Number(process.env.SERVER_BACKEND_PORT) || 5000;
+const HOST = process.env.HOST || "0.0.0.0";
 
-app.get("/", () => {
-  console.log("a7a");
+app.get("/", (req: Request, res: Response) => {
+  res.send("a7a");
 });
 
-app.use('/matches', matchRouter)
+app.use("/matches", matchRouter);
 
-app.listen(PORT, () => {
-  console.log(`app is listening to port ${PORT}`);
+const { broadcastMatchCreated } = attachWebSocketServer(server);
+app.locals.broadcastMatchCreated = broadcastMatchCreated;
+
+server.listen(PORT, () => {
+  const baseUrl =
+    HOST === "0.0.0.0" ? `http://localhost:${PORT}` : `http://${HOST}:${PORT}`;
+
+  console.log(`app is listening to port ${baseUrl}`);
+  console.log(
+    `WebSocket Server is running on ${baseUrl.replace("http", "ws")}/ws`,
+  );
 });

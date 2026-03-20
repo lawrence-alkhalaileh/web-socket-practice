@@ -5,6 +5,7 @@ import {
   MATCH_STATUS,
 } from "../validation/matches.ts";
 import { getMatchStatus } from "../utils/match-status.ts";
+import type { Request, Response } from "express";
 import { matches } from "../db/schema.ts";
 import { db } from "../db/db.ts";
 import { desc } from "drizzle-orm";
@@ -13,7 +14,7 @@ export const matchRouter = Router();
 
 const MAX_LIMIT = 100;
 
-matchRouter.get("/", async (req, res) => {
+matchRouter.get("/", async (req: Request, res: Response) => {
   const parsed = listMatchesQuerySchema.safeParse(req.query);
 
   if (!parsed.success) {
@@ -38,13 +39,18 @@ matchRouter.get("/", async (req, res) => {
   }
 });
 
-matchRouter.post("/", async (req, res) => {
+matchRouter.post("/", async (req: Request, res: Response) => {
   const parsed = createMatchSchema.safeParse(req.body);
 
   if (!parsed.success) {
+    const errors = parsed.error.issues.map((issue) => ({
+      path: issue.path.join(""),
+      message: issue.message,
+    }));
+
     return res.status(400).json({
       error: "Invalid payload.",
-      details: JSON.stringify(parsed.error.issues),
+      details: errors,
     });
   }
 
@@ -63,10 +69,12 @@ matchRouter.post("/", async (req, res) => {
       })
       .returning();
 
+    if (res.app.locals.broadcastMatchCreated) {
+      res.app.locals.broadcastMatchCreated(event);
+    }
+
     return res.status(201).json({ data: event });
   } catch (e) {
-    res
-      .status(500)
-      .json({ error: "Failed to create match." });
+    res.status(500).json({ error: "Failed to create match." });
   }
 });

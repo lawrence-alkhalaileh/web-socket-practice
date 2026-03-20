@@ -2,7 +2,7 @@ import { MATCH_STATUS } from "../validation/matches";
 
 type MatchStatus = (typeof MATCH_STATUS)[keyof typeof MATCH_STATUS];
 
-type Match = {
+export type Match = {
   start: string;
   status: MatchStatus;
   startTime: Date;
