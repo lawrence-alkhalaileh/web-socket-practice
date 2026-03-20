@@ -8,7 +8,11 @@ type WebSocketAPI = {
   broadcastMatchCreated: (match: Match) => void;
 };
 
-function sendJson(socket: WebSocket, payload: JsonPayload): void {
+interface WebSocketWithAlive extends WebSocket {
+  isAlive: boolean;
+}
+
+function sendJson(socket: WebSocketWithAlive, payload: JsonPayload): void {
   if (socket.readyState !== WebSocket.OPEN) {
     return;
   }
@@ -18,10 +22,11 @@ function sendJson(socket: WebSocket, payload: JsonPayload): void {
 
 function broadcast(wss: WebSocketServer, payload: JsonPayload): void {
   for (const client of wss.clients) {
-    if (client.readyState !== WebSocket.OPEN) {
+    const wsClient = client as WebSocketWithAlive;
+    if (wsClient.readyState !== WebSocket.OPEN) {
       continue;
     }
-    client.send(JSON.stringify(payload));
+    wsClient.send(JSON.stringify(payload));
   }
 }
 
@@ -34,11 +39,28 @@ export function attachWebSocketServer(server: HttpServer): WebSocketAPI {
     maxPayload: 1024 * 1024,
   });
 
-  wss.on("connection", (socket) => {
+  wss.on("connection", (socket: WebSocketWithAlive) => {
+    socket.isAlive = true;
+
+    socket.on("pong", () => {
+      socket.isAlive = true;
+    });
+
     sendJson(socket, { type: "welcome" });
 
     socket.on("error", console.error);
   });
+
+  const interval = setInterval(() => {
+    wss.clients.forEach((client) => {
+      const ws = client as WebSocketWithAlive;
+      if (ws.isAlive === false) return ws.terminate();
+      ws.isAlive = false;
+      ws.ping();
+    });
+  }, 30000);
+
+  wss.on("close", () => clearInterval(interval));
 
   function broadcastMatchCreated(match: Match): void {
     broadcast(wss, { type: "match_created", data: match });
