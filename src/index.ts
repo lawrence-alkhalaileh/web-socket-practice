@@ -4,6 +4,7 @@ import env from "dotenv";
 import type { Request, Response } from "express";
 import { matchRouter } from "./routes/matches";
 import { attachWebSocketServer } from "./ws/server";
+import { securityMiddleware } from "./arcjet";
 
 env.config({ quiet: true });
 const app = express();
@@ -13,8 +14,10 @@ app.use(express.json());
 const PORT = Number(process.env.SERVER_BACKEND_PORT) || 5000;
 const HOST = process.env.HOST || "0.0.0.0";
 
+app.use(securityMiddleware());
+
 app.get("/", (req: Request, res: Response) => {
-  res.send("a7a");
+  res.status(200).json({ a7a: "a7a" });
 });
 
 app.use("/matches", matchRouter);

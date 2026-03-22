@@ -1,6 +1,9 @@
 import { WebSocket, WebSocketServer } from "ws";
 import type { Server as HttpServer } from "http";
 import { Match } from "../utils/match-status";
+import { arcjetConfig } from "../arcjet";
+import { Request } from "express";
+import { da } from "zod/locales";
 
 type JsonPayload = Record<string, unknown>;
 
@@ -39,11 +42,35 @@ export function attachWebSocketServer(server: HttpServer): WebSocketAPI {
     maxPayload: 1024 * 1024,
   });
 
-  wss.on("connection", (socket: WebSocketWithAlive) => {
+  wss.on("connection", async (socket: WebSocketWithAlive, req: Request) => {
+    if (arcjetConfig) {
+      try {
+        const decision = await arcjetConfig.protect(req);
+        if (decision.isDenied()) {
+          const code: number = decision.reason.isRateLimit() ? 1013 : 1008;
+
+          const reason: string = decision.reason.isRateLimit()
+            ? "Rate Limit Exceeded"
+            : "Access Denied";
+
+          socket.close(code, reason);
+          return;
+        }
+      } catch (e) {
+        console.error("WS connection error", e);
+        socket.close(1011, "Server Error");
+        return;
+      }
+    }
+
     socket.isAlive = true;
 
     socket.on("pong", () => {
       socket.isAlive = true;
+    });
+
+    socket.on("message", (data) => {
+      socket.send(`Received a message ${data}`);
     });
 
     sendJson(socket, { type: "welcome" });
