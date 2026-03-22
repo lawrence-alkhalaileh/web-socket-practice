@@ -18,6 +18,19 @@ export const arcjetConfig = arcjetKey
     })
   : null;
 
+export const arcjetWebSocketConfig = arcjetKey
+  ? arcjet({
+      key: arcjetKey,
+      rules: [
+        shield({ mode: arcjetMode }),
+        detectBot({
+          mode: arcjetMode,
+          allow: ["CATEGORY:SEARCH_ENGINE", "CATEGORY:PREVIEW", "POSTMAN"],
+        }),
+      ],
+    })
+  : null;
+
 export function securityMiddleware() {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (!arcjetConfig) return next();

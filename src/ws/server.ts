@@ -1,9 +1,8 @@
 import { WebSocket, WebSocketServer } from "ws";
 import type { Server as HttpServer } from "http";
 import { Match } from "../utils/match-status";
-import { arcjetConfig } from "../arcjet";
-import { Request } from "express";
-import { da } from "zod/locales";
+import { arcjetWebSocketConfig } from "../arcjet";
+import { IncomingMessage } from "http";
 
 type JsonPayload = Record<string, unknown>;
 
@@ -36,47 +35,65 @@ function broadcast(wss: WebSocketServer, payload: JsonPayload): void {
 // avoid running separate ports for webSockets
 export function attachWebSocketServer(server: HttpServer): WebSocketAPI {
   const wss = new WebSocketServer({
-    server,
-    path: "/ws",
+    noServer: true,
     // prevent memory abuse / flooding
     maxPayload: 1024 * 1024,
   });
 
-  wss.on("connection", async (socket: WebSocketWithAlive, req: Request) => {
-    if (arcjetConfig) {
+  server.on("upgrade", async (req: IncomingMessage, socket, head) => {
+    const { pathname } = new URL(req.url!, `http://${req.headers.host}`);
+
+    if (pathname !== "/ws") {
+      return;
+    }
+
+    if (arcjetWebSocketConfig) {
       try {
-        const decision = await arcjetConfig.protect(req);
+        const decision = await arcjetWebSocketConfig.protect(req);
+
         if (decision.isDenied()) {
-          const code: number = decision.reason.isRateLimit() ? 1013 : 1008;
-
-          const reason: string = decision.reason.isRateLimit()
-            ? "Rate Limit Exceeded"
-            : "Access Denied";
-
-          socket.close(code, reason);
+          if (decision.reason.isRateLimit()) {
+            socket.write("HTTP/1.1 429 Too Many Requests\r\n\r\n");
+          } else {
+            socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+          }
+          socket.destroy();
           return;
         }
       } catch (e) {
-        console.error("WS connection error", e);
-        socket.close(1011, "Server Error");
+        console.error("WS upgrade protection error", e);
+        socket.write("HTTP/1.1 500 Internal Server Error\r\n\r\n");
+        socket.destroy();
         return;
       }
     }
 
-    socket.isAlive = true;
-
-    socket.on("pong", () => {
-      socket.isAlive = true;
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit("connection", ws, req);
     });
-
-    socket.on("message", (data) => {
-      socket.send(`Received a message ${data}`);
-    });
-
-    sendJson(socket, { type: "welcome" });
-
-    socket.on("error", console.error);
   });
+
+  wss.on(
+    "connection",
+    async (socket: WebSocketWithAlive, req: IncomingMessage) => {
+      socket.isAlive = true;
+
+      socket.on("pong", () => {
+        socket.isAlive = true;
+      });
+
+      sendJson(socket, { type: "welcome" });
+
+      socket.on("error", (err) => {
+        console.error(err);
+        socket.terminate();
+      });
+
+      socket.on("close", () => {
+        socket.terminate();
+      });
+    },
+  );
 
   const interval = setInterval(() => {
     wss.clients.forEach((client) => {
